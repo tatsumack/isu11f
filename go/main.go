@@ -149,10 +149,13 @@ func (h *handlers) IsLoggedIn(next echo.HandlerFunc) echo.HandlerFunc {
 		if sess.IsNew {
 			return c.String(http.StatusUnauthorized, "You are not logged in.")
 		}
-		_, ok := sess.Values["userID"]
+		userID, ok := sess.Values["userID"]
 		if !ok {
 			return c.String(http.StatusUnauthorized, "You are not logged in.")
 		}
+
+		// userIDを付与
+		c.Response().Header().Set("X-Isu-UserId", userID)
 
 		return next(c)
 	}
