@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"cloud.google.com/go/profiler"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
@@ -21,8 +22,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/crypto/bcrypt"
-
-	"cloud.google.com/go/profiler"
 )
 
 const (
@@ -566,6 +565,8 @@ type ClassScore struct {
 // GetGrades GET /api/users/me/grades 成績取得
 func (h *handlers) GetGrades(c echo.Context) error {
 	userID, _, _, err := getUserInfo(c)
+	//err := error(nil)
+	//userID := "01FF6J8XFS3906KB5YNKHSNQWG"
 	if err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -582,32 +583,38 @@ func (h *handlers) GetGrades(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	var regCourceIds []string;
-	for _, course := range registeredCourses {
-		regCourceIds = append(regCourceIds, course.ID)
+	regCourceIds := make([]string, 0);
+	if (len(registeredCourses) > 0) {
+		for _, course := range registeredCourses {
+			regCourceIds = append(regCourceIds, course.ID)
+		}
 	}
 
-	var regClasses []Class
-	query = "SELECT *" +
-		" FROM `classes`" +
-		" WHERE `course_id` IN (?)"
-	if err := h.DB.Select(&regClasses, query, regCourceIds); err != nil {
-		c.Logger().Error(err)
-		return c.NoContent(http.StatusInternalServerError)
+	regClasses := make([]Class, 0)
+	if (len(regCourceIds) > 0) {
+		query = "SELECT *" +
+			" FROM `classes`" +
+			" WHERE `course_id` IN (?)"
+		if err := h.DB.Select(&regClasses, query, regCourceIds); err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
 	}
 
-	var regClassIds []string
+	regClassIds := make([]string, 0)
 	for _, class := range regClasses {
 		regClassIds = append(regClassIds, class.ID)
 	}
 
 	regSubmissions := []Submission{}
-	query = "SELECT SUM(score)" +
-		" FROM `submissions`" +
-		" WHERE `class_id` IN (?) GROUP BY `users_id`"
-	if err := h.DB.Select(&regSubmissions, query, regClassIds); err != nil {
-		c.Logger().Error(err)
-		return c.NoContent(http.StatusInternalServerError)
+	if (len(regClassIds) > 0) {
+		query = "SELECT SUM(score)" +
+			" FROM `submissions`" +
+			" WHERE `class_id` IN (?) GROUP BY `users_id`"
+		if err := h.DB.Select(&regSubmissions, query, regClassIds); err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
 	}
 
 	// 科目毎の成績計算処理
@@ -727,20 +734,21 @@ func (h *handlers) GetGrades(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 	*/
-	credits := []Course{}
-	query =  "SELECT `users`.`id` AS `user_id`, SUM(`courses`.`credit`) AS `credits`" +
+	credits := []int{}
+	//query =  "SELECT `users`.`id` AS `user_id`, SUM(`courses`.`credit`) AS `credits`" +
+	query =  "SELECT SUM(`courses`.`credit`) AS `credits`" +
 		"     FROM `users`" +
 		"     JOIN `registrations` ON `users`.`id` = `registrations`.`user_id`" +
 		"     JOIN `courses` ON `registrations`.`course_id` = `courses`.`id` AND `courses`.`status` = ?" +
 		"     GROUP BY `users`.`id`"
-	if err := h.DB.Select(&credits, query, StatusClosed, StatusClosed); err != nil {
+	if err := h.DB.Select(&credits, query, StatusClosed); err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 	for userId, course := range registeredCourses {
 		s := regSubmissions[userId].Score
 		sc := float64(s * int(course.Credit))
-		gpa := sc / 100.0 / float64(credits[userId].Credit)
+		gpa := sc / 100.0 / float64(credits[userId])
 		gpas = append(gpas, gpa)
 	}
 
