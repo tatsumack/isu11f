@@ -39,7 +39,7 @@ type handlers struct {
 func main() {
 	cfg := profiler.Config{
 		Service:        "isu11f",
-		ServiceVersion: "v0.0.1",
+		ServiceVersion: "v0.0.2",
 		ProjectID:      os.Getenv("GCP_PROJECT_ID"),
 	}
 	if err := profiler.Start(cfg); err != nil {
@@ -53,7 +53,7 @@ func main() {
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	e.Use(session.Middleware(sessions.NewCookieStore([]byte("trapnomura"))))
+	//e.Use(session.Middleware(sessions.NewCookieStore([]byte("trapnomura"))))
 
 	db, _ := GetDB(false)
 	db.SetMaxOpenConns(10)
