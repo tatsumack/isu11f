@@ -1486,11 +1486,11 @@ func (h *handlers) AddAnnouncement(c echo.Context) error {
 
 	var courseName string
 	if err := tx.Get(&courseName, "SELECT `name` FROM `courses` WHERE `id` = ?", req.CourseID); err != nil {
+		if err == sql.ErrNoRows {
+			return c.String(http.StatusNotFound, "No such course.")
+		}
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
-	}
-	if courseName == "" {
-		return c.String(http.StatusNotFound, "No such course.")
 	}
 
 	if _, err := tx.Exec("INSERT INTO `announcements` (`id`, `course_id`, `course_name`, `title`, `message`) VALUES (?, ?, ?, ?, ?)",
