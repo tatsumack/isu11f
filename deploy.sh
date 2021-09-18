@@ -87,7 +87,7 @@ git fetch -p
 git checkout $BRANCH
 git pull --rebase
 cd go
-make all
+PATH=/home/isucon/local/go/bin:/home/isucon/go/bin:/usr/bin make all
 EOS
 done
 
