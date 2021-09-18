@@ -582,6 +582,34 @@ func (h *handlers) GetGrades(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	var regCourceIds []string;
+	for _, course := range registeredCourses {
+		regCourceIds = append(regCourceIds, course.ID)
+	}
+
+	var regClasses []Class
+	query = "SELECT *" +
+		" FROM `classes`" +
+		" WHERE `course_id` IN (?)"
+	if err := h.DB.Select(&regClasses, query, regCourceIds); err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	var regClassIds []string
+	for _, class := range regClasses {
+		regClassIds = append(regClassIds, class.ID)
+	}
+
+	regSubmissions := []Submission{}
+	query = "SELECT SUM(score)" +
+		" FROM `submissions`" +
+		" WHERE `class_id` IN (?) GROUP BY `users_id`"
+	if err := h.DB.Select(&regSubmissions, query, regClassIds); err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
 	// 科目毎の成績計算処理
 	courseResults := make([]CourseResult, 0, len(registeredCourses))
 	myGPA := 0.0
@@ -635,6 +663,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 
 		// この科目を履修している学生のTotalScore一覧を取得
 		var totals []int
+		/*
 		query := "SELECT IFNULL(SUM(`submissions`.`score`), 0) AS `total_score`" +
 			" FROM `users`" +
 			" JOIN `registrations` ON `users`.`id` = `registrations`.`user_id`" +
@@ -646,6 +675,10 @@ func (h *handlers) GetGrades(c echo.Context) error {
 		if err := h.DB.Select(&totals, query, course.ID); err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
+		}
+		*/
+		for _, submission := range regSubmissions {
+			totals = append(totals, submission.Score)
 		}
 
 		courseResults = append(courseResults, CourseResult{
@@ -1225,6 +1258,7 @@ type Submission struct {
 	UserID   string `db:"user_id"`
 	UserCode string `db:"user_code"`
 	FileName string `db:"file_name"`
+	Score int `db:"score"`
 }
 
 // DownloadSubmittedAssignments GET /api/courses/:courseID/classes/:classID/assignments/export 提出済みの課題ファイルをzip形式で一括ダウンロード
