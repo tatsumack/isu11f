@@ -1204,6 +1204,16 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 	}
 
 	go func() {
+		data, err := io.ReadAll(file)
+		if err != nil {
+			c.Logger().Error(err)
+		}
+
+		dst := AssignmentsDirectory + classID + "-" + userID + ".pdf"
+		if err := os.WriteFile(dst, data, 0666); err != nil {
+			c.Logger().Error(err)
+		}
+		
 		tx, err := h.DB.Beginx()
 		if err != nil {
 			c.Logger().Error(err)
@@ -1220,16 +1230,6 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 		if err != nil {
 			c.Logger().Error(err)
 			return
-		}
-
-		data, err := io.ReadAll(file)
-		if err != nil {
-			c.Logger().Error(err)
-		}
-
-		dst := AssignmentsDirectory + classID + "-" + userID + ".pdf"
-		if err := os.WriteFile(dst, data, 0666); err != nil {
-			c.Logger().Error(err)
 		}
 	}()
 
