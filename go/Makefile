@@ -7,6 +7,7 @@ all: clean build ## Cleanup and Build
 
 .PHONY: build
 build: $(GO_FILES) ## Build executable files
+	@$(COMPILER) mod tidy
 	@$(COMPILER) build -o $(DEST) -ldflags "-s -w"
 
 .PHONY: clean
