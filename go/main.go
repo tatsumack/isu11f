@@ -704,7 +704,9 @@ func (h *handlers) GetGrades(c echo.Context) error {
 
 	// GPAの統計値
 	// 一つでも修了した科目がある学生のGPA一覧
+	// GPA = SUM( 科目の総合点 * 科目の単位数 ) / 総獲得単位数 / 100
 	var gpas []float64
+	/*
 	query = "SELECT IFNULL(SUM(`submissions`.`score` * `courses`.`credit`), 0) / 100 / `credits`.`credits` AS `gpa`" +
 		" FROM `users`" +
 		" JOIN (" +
@@ -723,6 +725,23 @@ func (h *handlers) GetGrades(c echo.Context) error {
 	if err := h.DB.Select(&gpas, query, StatusClosed, StatusClosed, Student); err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
+	}
+	*/
+	credits := []Course{}
+	query =  "SELECT `users`.`id` AS `user_id`, SUM(`courses`.`credit`) AS `credits`" +
+		"     FROM `users`" +
+		"     JOIN `registrations` ON `users`.`id` = `registrations`.`user_id`" +
+		"     JOIN `courses` ON `registrations`.`course_id` = `courses`.`id` AND `courses`.`status` = ?" +
+		"     GROUP BY `users`.`id`"
+	if err := h.DB.Select(&credits, query, StatusClosed, StatusClosed); err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	for userId, course := range registeredCourses {
+		s := regSubmissions[userId].Score
+		sc := float64(s * int(course.Credit))
+		gpa := sc / 100.0 / float64(credits[userId].Credit)
+		gpas = append(gpas, gpa)
 	}
 
 	res := GetGradeResponse{
