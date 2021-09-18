@@ -1532,7 +1532,7 @@ func (h *handlers) AddAnnouncement(c echo.Context) error {
 
 	if (len(data) > 0) {
 		_, err = tx.NamedExec(
-			"INSERT INTO `unread_announcements` (`announcement_id`, `user_id`) VALUES (:announcement_id, :course_id, :user_id)", data)
+			"INSERT INTO `unread_announcements` (`announcement_id`, `course_id`, `user_id`) VALUES (:announcement_id, :course_id, :user_id)", data)
 		if err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
