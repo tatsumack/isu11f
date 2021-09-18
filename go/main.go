@@ -58,7 +58,8 @@ func main() {
 	e.Use(session.Middleware(sessions.NewCookieStore([]byte("trapnomura"))))
 
 	db, _ := GetDB(false)
-	db.SetMaxOpenConns(10)
+	db.SetMaxOpenConns(150)
+	db.SetMaxIdleConns(150)
 
 	h := &handlers{
 		DB: db,
@@ -1213,7 +1214,7 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 		if err := os.WriteFile(dst, data, 0666); err != nil {
 			c.Logger().Error(err)
 		}
-		
+
 		tx, err := h.DB.Beginx()
 		if err != nil {
 			c.Logger().Error(err)
