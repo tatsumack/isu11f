@@ -69,7 +69,7 @@ CREATE TABLE `submissions_count`
 (
     `class_id`  CHAR(26)     NOT NULL,
     `cnt`       INT          NOT NULL DEFAULT 0,
-    PRIMARY KEY (`class_id`),
+    PRIMARY KEY (`class_id`)
 );
 
 CREATE TABLE `announcements`
