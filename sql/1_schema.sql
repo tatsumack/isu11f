@@ -67,19 +67,22 @@ CREATE TABLE `submissions`
 
 CREATE TABLE `announcements`
 (
-    `id`         CHAR(26) PRIMARY KEY,
-    `course_id`  CHAR(26)     NOT NULL,
-    `title`      VARCHAR(255) NOT NULL,
-    `message`    TEXT         NOT NULL,
+    `id`          CHAR(26) PRIMARY KEY,
+    `course_id`   CHAR(26)     NOT NULL,
+    `course_name` VARCHAR(255)                                                  NOT NULL,
+    `title`       VARCHAR(255) NOT NULL,
+    `message`     TEXT         NOT NULL,
     CONSTRAINT FK_announcements_course_id FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`)
 );
 
 CREATE TABLE `unread_announcements`
 (
     `announcement_id` CHAR(26)   NOT NULL,
+    `course_id`       CHAR(26)     NOT NULL,
     `user_id`         CHAR(26)   NOT NULL,
     `is_deleted`      TINYINT(1) NOT NULL DEFAULT false,
     PRIMARY KEY (`announcement_id`, `user_id`),
+    INDEX `i1` (`announcement_id`, `course_id`),
     CONSTRAINT FK_unread_announcements_announcement_id FOREIGN KEY (`announcement_id`) REFERENCES `announcements` (`id`),
     CONSTRAINT FK_unread_announcements_user_id FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 );
