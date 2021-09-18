@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS `classes`;
 DROP TABLE IF EXISTS `registrations`;
 DROP TABLE IF EXISTS `courses`;
 DROP TABLE IF EXISTS `users`;
+DROP TABLE IF EXISTS `user_score`;
 
 -- master data
 CREATE TABLE `users`
@@ -94,4 +95,13 @@ CREATE TABLE `unread_announcements`
     INDEX `i2` (`user_id`, `announcement_id`),
     CONSTRAINT FK_unread_announcements_announcement_id FOREIGN KEY (`announcement_id`) REFERENCES `announcements` (`id`),
     CONSTRAINT FK_unread_announcements_user_id FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+);
+
+CREATE TABLE `user_score`
+(
+    `user_id`   CHAR(26)     NOT NULL,
+    `course_id` CHAR(26)     NOT NULL,
+    `score`     INT UNSIGNED,
+    PRIMARY KEY (`user_id`, `course_id`),
+    INDEX `i1` (`course_id`)
 );
