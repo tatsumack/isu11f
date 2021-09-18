@@ -155,7 +155,7 @@ func (h *handlers) IsLoggedIn(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		// userIDを付与
-		c.Response().Header().Set("X-Isu-UserId", userID)
+		c.Response().Header().Set("X-Isu-UserId", userID.(string))
 
 		return next(c)
 	}
