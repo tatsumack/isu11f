@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"cloud.google.com/go/profiler"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
@@ -22,8 +23,6 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/sync/singleflight"
-
-	"cloud.google.com/go/profiler"
 )
 
 const (
@@ -601,6 +600,55 @@ func (h *handlers) GetGrades(c echo.Context) error {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
+	regCourceMap := make(map[string]Course)
+	for _, c := range registeredCourses {
+		regCourceMap[c.ID] = c
+	}
+
+	regCourceIds := make([]string, 0);
+	if (len(registeredCourses) > 0) {
+		for _, course := range registeredCourses {
+			regCourceIds = append(regCourceIds, course.ID)
+		}
+	}
+
+	regClasses := make([]Class, 0)
+	if (len(regCourceIds) > 0) {
+		query = "SELECT *" +
+			" FROM `classes`" +
+			" WHERE `course_id` IN (?)"
+		sql, params, err := sqlx.In(query, regCourceIds)
+		if err = h.DB.Select(&regClasses, sql, params...); err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+	}
+
+	regClassIds := make([]string, 0)
+	for _, class := range regClasses {
+		regClassIds = append(regClassIds, class.ID)
+	}
+
+	var regSubmissions []Submission
+	if (len(regClassIds) > 0) {
+		query = "SELECT user_id, score" +
+			" FROM `submissions`" +
+			//" WHERE `class_id` IN (?) GROUP BY `user_id`"
+			" WHERE `class_id` IN (?)"
+		sql, params, err := sqlx.In(query, regClassIds)
+		if err = h.DB.Select(&regSubmissions, sql, params...); err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+	}
+	regSubmissionsMap := make(map[string]map[string]Submission)
+	for _, submission := range regSubmissions {
+		if _, exist := regSubmissionsMap[submission.UserID]; !exist {
+			regSubmissionsMap[submission.UserID] = make(map[string]Submission)
+		}
+		regSubmissionsMap[submission.UserID][submission.ClassID] = submission
+	}
+
 
 	// 科目毎の成績計算処理
 	courseResults := make([]CourseResult, 0, len(registeredCourses))
@@ -699,6 +747,11 @@ func (h *handlers) GetGrades(c echo.Context) error {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
+		/*
+		for _, submission := range regSubmissions {
+			totals = append(totals, submission.Score)
+		}
+		*/
 
 		courseResults = append(courseResults, CourseResult{
 			Name:             course.Name,
@@ -724,6 +777,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 	// GPAの統計値
 	// 一つでも修了した科目がある学生のGPA一覧
 	var gpas []float64
+	/*
 	query = "SELECT IFNULL(SUM(`submissions`.`score` * `courses`.`credit`), 0) / 100 / `credits`.`credits` AS `gpa`" +
 		" FROM `users`" +
 		" JOIN (" +
@@ -742,6 +796,40 @@ func (h *handlers) GetGrades(c echo.Context) error {
 	if err := h.DB.Select(&gpas, query, StatusClosed, StatusClosed, Student); err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
+	}
+	*/
+	credits := make([]struct {
+		UserId string `db:"user_id"`
+		Credits int `db:"credits"`
+	}, 0)
+	query =  "SELECT `users`.`id` AS `user_id`, SUM(`courses`.`credit`) AS `credits`" +
+		"     FROM `users`" +
+		"     JOIN `registrations` ON `users`.`id` = `registrations`.`user_id`" +
+		"     JOIN `courses` ON `registrations`.`course_id` = `courses`.`id` AND `courses`.`status` = ?" +
+		"     GROUP BY `users`.`id`"
+	if err := h.DB.Select(&credits, query, StatusClosed); err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	creditsMap := make(map[string]struct {
+		UserId string `db:"user_id"`
+		Credits int `db:"credits"`
+	})
+	for _, c := range credits {
+		creditsMap[c.UserId] = c
+	}
+	// GPA = SUM( 科目の総合点 * 科目の単位数 ) / 総獲得単位数 / 100
+	for userId, regSub := range regSubmissionsMap {
+		var sum float64 = 0
+		for courceId, submission := range regSub {
+			sum += float64(submission.Score * int(regCourceMap[courceId].Credit))
+		}
+		c := creditsMap[userId].Credits
+		var gpa = 0.0
+		if (c > 0) {
+			gpa = sum / 100 / float64(c)
+		}
+		gpas = append(gpas, gpa)
 	}
 
 	res := GetGradeResponse{
@@ -1290,8 +1378,10 @@ func (h *handlers) RegisterScores(c echo.Context) error {
 
 type Submission struct {
 	UserID   string `db:"user_id"`
+	ClassID  string `db:"class_id"`
 	UserCode string `db:"user_code"`
 	FileName string `db:"file_name"`
+	Score int `db:"score"`
 }
 
 // DownloadSubmittedAssignments GET /api/courses/:courseID/classes/:classID/assignments/export 提出済みの課題ファイルをzip形式で一括ダウンロード
