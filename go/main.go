@@ -1482,7 +1482,7 @@ func (h *handlers) AddAnnouncement(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	var data []interface{}
+	data := make([]interface{}, 0)
 	for _, target := range targets {
 		d := struct {
 			Announcement string `db:"announcement_id"`
