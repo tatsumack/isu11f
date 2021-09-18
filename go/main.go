@@ -648,7 +648,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 			" FROM `submissions`" +
 			//" WHERE `class_id` IN (?) GROUP BY `user_id`"
 			" WHERE `class_id` IN (?)"
-		sql, params, err := sqlx.In(query, closedCourceIds)
+		sql, params, err := sqlx.In(query, regClassIds)
 		if err = h.DB.Select(&regSubmissions, sql, params...); err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
