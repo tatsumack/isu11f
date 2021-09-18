@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
@@ -1502,6 +1503,17 @@ type AnnouncementDetail struct {
 }
 
 // GetAnnouncementDetail GET /api/announcements/:announcementID お知らせ詳細取得
+type announce struct {
+	ID         string `json:"id" db:"id"`
+	CourseID   string `json:"course_id" db:"course_id"`
+	CourseName string `json:"course_name" db:"course_name"`
+	Title      string `json:"title" db:"title"`
+	Message    string `json:"message" db:"message"`
+}
+
+var announcementCache = map[string]announce{}
+var announcementMutex sync.RWMutex
+
 func (h *handlers) GetAnnouncementDetail(c echo.Context) error {
 	userID, _, _, err := getUserInfo(c)
 	if err != nil {
@@ -1511,6 +1523,23 @@ func (h *handlers) GetAnnouncementDetail(c echo.Context) error {
 
 	announcementID := c.Param("announcementID")
 
+	announcementMutex.RLock()
+	a, ok := announcementCache[announcementID]
+	announcementMutex.RUnlock()
+	if !ok {
+		q := "SELECT `announcements`.`id`, `courses`.`id` AS `course_id`, `courses`.`name` AS `course_name`, `announcements`.`title`, `announcements`.`message`" +
+			" FROM `announcements`" +
+			" JOIN `courses` ON `courses`.`id` = `announcements`.`course_id`" +
+			" WHERE `announcements`.`id` = ?"
+		if err := h.DB.Get(&a, q, announcementID); err != nil && err != sql.ErrNoRows {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		announcementMutex.Lock()
+		announcementCache[announcementID] = a
+		announcementMutex.Unlock()
+	}
+
 	tx, err := h.DB.Beginx()
 	if err != nil {
 		c.Logger().Error(err)
@@ -1518,18 +1547,23 @@ func (h *handlers) GetAnnouncementDetail(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
-	var announcement AnnouncementDetail
-	query := "SELECT `announcements`.`id`, `courses`.`id` AS `course_id`, `courses`.`name` AS `course_name`, `announcements`.`title`, `announcements`.`message`, NOT `unread_announcements`.`is_deleted` AS `unread`" +
-		" FROM `announcements`" +
-		" JOIN `courses` ON `courses`.`id` = `announcements`.`course_id`" +
-		" JOIN `unread_announcements` ON `unread_announcements`.`announcement_id` = `announcements`.`id`" +
-		" WHERE `announcements`.`id` = ?" +
-		" AND `unread_announcements`.`user_id` = ?"
-	if err := tx.Get(&announcement, query, announcementID, userID); err != nil && err != sql.ErrNoRows {
+	var unread bool
+	query := "SELECT NOT `unread_announcements`.`is_deleted` AS `unread`" +
+		" FROM `unread_announcements`" +
+		" WHERE`announcement_id` = ? AND `user_id` = ?"
+	if err := tx.Get(&unread, query, announcementID, userID); err != nil && err != sql.ErrNoRows {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	} else if err == sql.ErrNoRows {
 		return c.String(http.StatusNotFound, "No such announcement.")
+	}
+	announcement := AnnouncementDetail{
+		ID:         a.ID,
+		CourseID:   a.CourseID,
+		CourseName: a.CourseName,
+		Title:      a.Title,
+		Message:    a.Message,
+		Unread:     unread,
 	}
 
 	var registrationCount int
