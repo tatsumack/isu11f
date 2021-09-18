@@ -1381,30 +1381,32 @@ func (h *handlers) GetAnnouncementList(c echo.Context) error {
 		unreadMap[row.AnnouncementID] = row.IsDeleted == 0
 	}
 
-	q1 := "SELECT `announcements`.`id`, `announcements`.`title`, `announcements`.`course_name`,`announcements`.`course_id`" +
-		" FROM `announcements`" +
-		" WHERE `announcements`.`id` IN (?) ORDER BY `id` DESC"
-	q1, params, err := sqlx.In(q1, announcementIDs)
-	if err != nil {
-		c.Logger().Error(err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-
-	var announcementRows []AnnouncementIDTitleName
-	if err := tx.Select(&announcementRows, q1, params...); err != nil {
-		c.Logger().Error(err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-
 	var announcements []AnnouncementWithoutDetail
-	for _, row := range announcementRows {
-		announcements = append(announcements, AnnouncementWithoutDetail{
-			ID:         row.ID,
-			CourseID:   row.CourseID,
-			CourseName: row.CourseName,
-			Title:      row.Title,
-			Unread:     unreadMap[row.ID],
-		})
+	if len(announcementIDs) > 0 {
+		q1 := "SELECT `announcements`.`id`, `announcements`.`title`, `announcements`.`course_name`,`announcements`.`course_id`" +
+			" FROM `announcements`" +
+			" WHERE `announcements`.`id` IN (?) ORDER BY `id` DESC"
+		q1, params, err := sqlx.In(q1, announcementIDs)
+		if err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+
+		var announcementRows []AnnouncementIDTitleName
+		if err := tx.Select(&announcementRows, q1, params...); err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+
+		for _, row := range announcementRows {
+			announcements = append(announcements, AnnouncementWithoutDetail{
+				ID:         row.ID,
+				CourseID:   row.CourseID,
+				CourseName: row.CourseName,
+				Title:      row.Title,
+				Unread:     unreadMap[row.ID],
+			})
+		}
 	}
 
 	var unreadCount int
