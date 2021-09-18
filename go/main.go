@@ -1364,7 +1364,7 @@ func (h *handlers) GetAnnouncementList(c echo.Context) error {
 		q0 += " AND `course_id` = ?"
 		args = append(args, courseID)
 	}
-	q0 += "  ORDER BY `announcements_id` DESC LIMIT ? OFFSET ? "
+	q0 += "  ORDER BY `announcement_id` DESC LIMIT ? OFFSET ? "
 	args = append(args, limit, offset)
 
 	var unreadRows []unreadRow
