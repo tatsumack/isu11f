@@ -1483,7 +1483,11 @@ func (h *handlers) AddAnnouncement(c echo.Context) error {
 	}
 
 	_, err = tx.NamedExec(
-		"INSERT INTO `unread_announcements` (`announcement_id`, `user_id`) VALUES (" + req.ID +  ", :id)", targets)
+		"INSERT INTO `unread_announcements` (`announcement_id`, `user_id`) VALUES (`" + req.ID +  "`, :id)", targets)
+	if err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
 
 	if err := tx.Commit(); err != nil {
 		c.Logger().Error(err)
