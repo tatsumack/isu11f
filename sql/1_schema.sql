@@ -2,6 +2,7 @@
 DROP TABLE IF EXISTS `unread_announcements`;
 DROP TABLE IF EXISTS `announcements`;
 DROP TABLE IF EXISTS `submissions`;
+DROP TABLE IF EXISTS `submissions_count`;
 DROP TABLE IF EXISTS `classes`;
 DROP TABLE IF EXISTS `registrations`;
 DROP TABLE IF EXISTS `courses`;
