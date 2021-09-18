@@ -644,8 +644,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 
 	var closedCources []Course
 	query = "SELECT `courses`.*" +
-		" FROM `registrations`" +
-		" JOIN `courses` ON `registrations`.`course_id` = `courses`.`id`" +
+		" FROM `courses`" +
 		" WHERE `status` = ?"
 	if err := h.DB.Select(&closedCources, query, StatusClosed); err != nil {
 		c.Logger().Error(err)
