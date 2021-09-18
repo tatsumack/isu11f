@@ -1199,7 +1199,8 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	if (result.RowsAffected() == 1) {
+	row, _ := result.RowsAffected()
+	if (row == 1) {
 	  if _, err := tx.Exec("INSERT INTO `submissions_count` (`class_id`, `cnt`) VALUES (?, 1) ON DUPLICATE KEY UPDATE `cnt` = `cnt` + 1", classID); err != nil {
 	    c.Logger().Error(err)
 	    return c.NoContent(http.StatusInternalServerError)
