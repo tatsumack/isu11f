@@ -1545,7 +1545,7 @@ func (h *handlers) GetAnnouncementDetail(c echo.Context) error {
 			announcementMutex.Lock()
 			announcementCache[announcementID] = &row
 			announcementMutex.Unlock()
-			return row, nil
+			return &row, nil
 		})
 		if err != nil {
 			c.Logger().Error(err)
