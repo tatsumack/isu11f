@@ -1108,12 +1108,6 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 	courseID := c.Param("courseID")
 	classID := c.Param("classID")
 
-	file, header, err := c.Request().FormFile("file")
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid file.")
-	}
-	defer file.Close()
-
 	tx, err := h.DB.Beginx()
 	if err != nil {
 		c.Logger().Error(err)
@@ -1151,6 +1145,12 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 	if submissionClosed {
 		return c.String(http.StatusBadRequest, "Submission has been closed for this class.")
 	}
+
+	file, header, err := c.Request().FormFile("file")
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid file.")
+	}
+	defer file.Close()
 
 	if _, err := tx.Exec("INSERT INTO `submissions` (`user_id`, `class_id`, `file_name`) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `file_name` = VALUES(`file_name`)", userID, classID, header.Filename); err != nil {
 		c.Logger().Error(err)
