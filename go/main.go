@@ -1132,21 +1132,19 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 		return c.String(http.StatusNotFound, "No such class.")
 	}
 	if submissionClosed {
+		var status CourseStatus
+		if err := tx.Get(&status, "SELECT `status` FROM `courses` WHERE `id` = ? FOR SHARE", courseID); err != nil && err != sql.ErrNoRows {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		} else if err == sql.ErrNoRows {
+			return c.String(http.StatusNotFound, "No such course.")
+		}
+		if status != StatusInProgress {
+			return c.String(http.StatusBadRequest, "This course is not in progress.")
+		}
+
 		return c.String(http.StatusBadRequest, "Submission has been closed for this class.")
 	}
-
-	/*
-	var status CourseStatus
-	if err := tx.Get(&status, "SELECT `status` FROM `courses` WHERE `id` = ? FOR SHARE", courseID); err != nil && err != sql.ErrNoRows {
-		c.Logger().Error(err)
-		return c.NoContent(http.StatusInternalServerError)
-	} else if err == sql.ErrNoRows {
-		return c.String(http.StatusNotFound, "No such course.")
-	}
-	if status != StatusInProgress {
-		return c.String(http.StatusBadRequest, "This course is not in progress.")
-	}
-	*/
 
 	file, header, err := c.Request().FormFile("file")
 	if err != nil {
