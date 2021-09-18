@@ -60,7 +60,8 @@ func main() {
 	e.Use(session.Middleware(sessions.NewCookieStore([]byte("trapnomura"))))
 
 	db, _ := GetDB(false)
-	db.SetMaxOpenConns(10)
+	db.SetMaxOpenConns(150)
+	db.SetMaxIdleConns(150)
 
 	h := &handlers{
 		DB: db,
@@ -1260,6 +1261,12 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 	courseID := c.Param("courseID")
 	classID := c.Param("classID")
 
+	file, header, err := c.Request().FormFile("file")
+	if err != nil {
+		return c.String(http.StatusBadRequest, "Invalid file.")
+	}
+	defer file.Close()
+
 	tx, err := h.DB.Beginx()
 	if err != nil {
 		c.Logger().Error(err)
@@ -1298,13 +1305,6 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "Submission has been closed for this class.")
 	}
 
-	file, header, err := c.Request().FormFile("file")
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Invalid file.")
-	}
-	defer file.Close()
-
-
 	result, err := tx.Exec("INSERT INTO `submissions` (`user_id`, `class_id`, `file_name`) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `file_name` = VALUES(`file_name`)", userID, classID, header.Filename);
 	if err != nil {
 		c.Logger().Error(err)
@@ -1312,12 +1312,6 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 	}
 
 	row, _ := result.RowsAffected()
-	if (row == 1) {
-	  if _, err := tx.Exec("INSERT INTO `submissions_count` (`class_id`, `cnt`) VALUES (?, 1) ON DUPLICATE KEY UPDATE `cnt` = `cnt` + 1", classID); err != nil {
-	    c.Logger().Error(err)
-	    return c.NoContent(http.StatusInternalServerError)
-	  }
-	}
 
 	if err := tx.Commit(); err != nil {
 		c.Logger().Error(err)
@@ -1333,6 +1327,24 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 		dst := AssignmentsDirectory + classID + "-" + userID + ".pdf"
 		if err := os.WriteFile(dst, data, 0666); err != nil {
 			c.Logger().Error(err)
+		}
+
+		tx, err := h.DB.Beginx()
+		if err != nil {
+			c.Logger().Error(err)
+			return
+		}
+		defer tx.Rollback()
+		if row == 1 {
+			if _, err := tx.Exec("INSERT INTO `submissions_count` (`class_id`, `cnt`) VALUES (?, 1) ON DUPLICATE KEY UPDATE `cnt` = `cnt` + 1", classID); err != nil {
+				c.Logger().Error(err)
+				return
+			}
+		}
+		err = tx.Commit()
+		if err != nil {
+			c.Logger().Error(err)
+			return
 		}
 	}()
 
