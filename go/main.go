@@ -602,16 +602,36 @@ func (h *handlers) GetGrades(c echo.Context) error {
 			return c.NoContent(http.StatusInternalServerError)
 		}
 
+		var classIDs []string
+		for _, class := range classes {
+			classIDs = append(classIDs, class.ID)
+		}
+		q1 := "SELECT `class_id`, `cnt`" +
+			" FROM `submissions_count`" +
+			" WHERE `class_id` IN (?)"
+		q1, params, err := sqlx.In(q1, classIDs)
+		if err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		type countRow struct {
+			ClassID string `db:"class_id"`
+			Cnt     int    `db:"cnt"`
+		}
+		var countRows []countRow
+		if err := h.DB.Select(&countRows, q1, params...); err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		countMap := map[string]int{}
+		for _, row := range countRows {
+			countMap[row.ClassID] = row.Cnt
+		}
+
 		// 講義毎の成績計算処理
 		classScores := make([]ClassScore, 0, len(classes))
 		var myTotalScore int
 		for _, class := range classes {
-			var submissionsCount int
-			if err := h.DB.Get(&submissionsCount, "SELECT COUNT(*) FROM `submissions` WHERE `class_id` = ?", class.ID); err != nil {
-				c.Logger().Error(err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
-
 			var myScore sql.NullInt64
 			if err := h.DB.Get(&myScore, "SELECT `submissions`.`score` FROM `submissions` WHERE `user_id` = ? AND `class_id` = ?", userID, class.ID); err != nil && err != sql.ErrNoRows {
 				c.Logger().Error(err)
@@ -622,7 +642,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 					Part:       class.Part,
 					Title:      class.Title,
 					Score:      nil,
-					Submitters: submissionsCount,
+					Submitters: countMap[class.ID],
 				})
 			} else {
 				score := int(myScore.Int64)
@@ -632,7 +652,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 					Part:       class.Part,
 					Title:      class.Title,
 					Score:      &score,
-					Submitters: submissionsCount,
+					Submitters: countMap[class.ID],
 				})
 			}
 		}
@@ -1153,6 +1173,11 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 	defer file.Close()
 
 	if _, err := tx.Exec("INSERT INTO `submissions` (`user_id`, `class_id`, `file_name`) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `file_name` = VALUES(`file_name`)", userID, classID, header.Filename); err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	if _, err := tx.Exec("INSERT INTO `submissions_count` (`class_id`, `cnt`) VALUES (?, 0) ON DUPLICATE KEY UPDATE `cnt` = `cnt` + 1", classID); err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}

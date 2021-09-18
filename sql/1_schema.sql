@@ -65,6 +65,13 @@ CREATE TABLE `submissions`
     CONSTRAINT FK_submissions_class_id FOREIGN KEY (`class_id`) REFERENCES `classes` (`id`)
 );
 
+CREATE TABLE `submissions_count`
+(
+    `class_id`  CHAR(26)     NOT NULL,
+    `cnt`       INT          NOT NULL DEFAULT 0,
+    PRIMARY KEY (`class_id`),
+);
+
 CREATE TABLE `announcements`
 (
     `id`          CHAR(26) PRIMARY KEY,
