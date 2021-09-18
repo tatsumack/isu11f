@@ -21,6 +21,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/sync/singleflight"
 
 	"cloud.google.com/go/profiler"
 )
@@ -1514,8 +1515,9 @@ type announce struct {
 	Message    string `json:"message" db:"message"`
 }
 
-var announcementCache = map[string]announce{}
+var announcementCache = map[string]*announce{}
 var announcementMutex sync.RWMutex
+var aSingleFlightGroup singleflight.Group
 
 func (h *handlers) GetAnnouncementDetail(c echo.Context) error {
 	userID, _, _, err := getUserInfo(c)
@@ -1530,17 +1532,26 @@ func (h *handlers) GetAnnouncementDetail(c echo.Context) error {
 	a, ok := announcementCache[announcementID]
 	announcementMutex.RUnlock()
 	if !ok {
-		q := "SELECT `announcements`.`id`, `courses`.`id` AS `course_id`, `courses`.`name` AS `course_name`, `announcements`.`title`, `announcements`.`message`" +
-			" FROM `announcements`" +
-			" JOIN `courses` ON `courses`.`id` = `announcements`.`course_id`" +
-			" WHERE `announcements`.`id` = ?"
-		if err := h.DB.Get(&a, q, announcementID); err != nil && err != sql.ErrNoRows {
+		v, err, _ := aSingleFlightGroup.Do(announcementID, func() (interface{}, error) {
+			var row announce
+			q := "SELECT `announcements`.`id`, `courses`.`id` AS `course_id`, `courses`.`name` AS `course_name`, `announcements`.`title`, `announcements`.`message`" +
+				" FROM `announcements`" +
+				" JOIN `courses` ON `courses`.`id` = `announcements`.`course_id`" +
+				" WHERE `announcements`.`id` = ?"
+			if err := h.DB.Get(&row, q, announcementID); err != nil && err != sql.ErrNoRows {
+				c.Logger().Error(err)
+				return nil, err
+			}
+			announcementMutex.Lock()
+			announcementCache[announcementID] = &row
+			announcementMutex.Unlock()
+			return &row, nil
+		})
+		if err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
-		announcementMutex.Lock()
-		announcementCache[announcementID] = a
-		announcementMutex.Unlock()
+		a = v.(*announce)
 	}
 
 	tx, err := h.DB.Beginx()
