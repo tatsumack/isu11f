@@ -12,7 +12,7 @@ KEY_OPTION="-A"
 
 WEB_SERVERS="isu01"
 APP_SERVERS="isu01"
-DB_SERVER="isu01"
+DB_SERVER="isu02"
 
 BACKUP_TARGET_LIST="/var/log/nginx/access.log /var/log/nginx/error.log"
 
