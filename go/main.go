@@ -20,6 +20,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/crypto/bcrypt"
+
+	"cloud.google.com/go/profiler"
 )
 
 const (
@@ -35,6 +37,15 @@ type handlers struct {
 }
 
 func main() {
+	cfg := profiler.Config{
+		Service:        "isu11f",
+		ServiceVersion: "v0.0.1",
+		ProjectID:      os.Getenv("GCP_PROJECT_ID"),
+	}
+	if err := profiler.Start(cfg); err != nil {
+		panic(err)
+	}
+
 	e := echo.New()
 	e.Debug = GetEnv("DEBUG", "") == "true"
 	e.Server.Addr = fmt.Sprintf(":%v", GetEnv("PORT", "7000"))
