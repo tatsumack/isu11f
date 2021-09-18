@@ -91,6 +91,7 @@ CREATE TABLE `unread_announcements`
     `is_deleted`      TINYINT(1) NOT NULL DEFAULT false,
     PRIMARY KEY (`announcement_id`, `user_id`),
     INDEX `i1` (`announcement_id`, `course_id`),
+    INDEX `i2` (`user_id`, `announcement_id`),
     CONSTRAINT FK_unread_announcements_announcement_id FOREIGN KEY (`announcement_id`) REFERENCES `announcements` (`id`),
     CONSTRAINT FK_unread_announcements_user_id FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 );
