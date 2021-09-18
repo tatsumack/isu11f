@@ -1365,7 +1365,8 @@ func (h *handlers) GetAnnouncementList(c echo.Context) error {
 		args = append(args, courseID)
 	}
 	q0 += "  ORDER BY `announcement_id` DESC LIMIT ? OFFSET ? "
-	args = append(args, limit, offset)
+	// limitより多く上限を設定し、実際にlimitより多くレコードが取得できた場合は次のページが存在する
+	args = append(args, limit+1, offset)
 
 	var unreadRows []unreadRow
 	if err := tx.Select(&unreadRows, q0, args...); err != nil {
@@ -1389,7 +1390,6 @@ func (h *handlers) GetAnnouncementList(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	// limitより多く上限を設定し、実際にlimitより多くレコードが取得できた場合は次のページが存在する
 	var announcementRows []AnnouncementIDTitleName
 	if err := tx.Select(&announcementRows, q1, params...); err != nil {
 		c.Logger().Error(err)
