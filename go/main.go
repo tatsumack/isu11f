@@ -1213,7 +1213,7 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 		if err := os.WriteFile(dst, data, 0666); err != nil {
 			c.Logger().Error(err)
 		}
-		
+
 		tx, err := h.DB.Beginx()
 		if err != nil {
 			c.Logger().Error(err)
