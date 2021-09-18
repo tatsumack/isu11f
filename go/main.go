@@ -40,7 +40,7 @@ type handlers struct {
 func main() {
 	cfg := profiler.Config{
 		Service:        "isu11f",
-		ServiceVersion: "v0.0.1",
+		ServiceVersion: "v0.0.3",
 		ProjectID:      os.Getenv("GCP_PROJECT_ID"),
 	}
 	if err := profiler.Start(cfg); err != nil {
