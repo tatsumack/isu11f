@@ -629,7 +629,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 		}
 
 		q2 := "SELECT `class_id`, `score` FROM `submissions` WHERE `user_id` = ? AND `class_id` in (?) "
-		q2, params2, err := sqlx.In(q2, classIDs)
+		q2, params2, err := sqlx.In(q2, userID, classIDs)
 		if err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
