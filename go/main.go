@@ -515,6 +515,12 @@ func (h *handlers) RegisterCourses(c echo.Context) error {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
+
+		_, err = tx.Exec("INSERT IGNORE INTO `user_score` (`user_id`, `course_id`, `score`) VALUES (?, ?, 0) ", userID, course.ID)
+		if err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
 	}
 
 	if err = tx.Commit(); err != nil {
@@ -650,7 +656,6 @@ func (h *handlers) GetGrades(c echo.Context) error {
 			}
 		}
 
-
 		// 講義毎の成績計算処理
 		classScores := make([]ClassScore, 0, len(classes))
 		var myTotalScore int
@@ -679,15 +684,8 @@ func (h *handlers) GetGrades(c echo.Context) error {
 
 		// この科目を履修している学生のTotalScore一覧を取得
 		var totals []int
-		query := "SELECT IFNULL(SUM(`submissions`.`score`), 0) AS `total_score`" +
-			" FROM `users`" +
-			" JOIN `registrations` ON `users`.`id` = `registrations`.`user_id`" +
-			" JOIN `courses` ON `registrations`.`course_id` = `courses`.`id`" +
-			" LEFT JOIN `classes` ON `courses`.`id` = `classes`.`course_id`" +
-			" LEFT JOIN `submissions` ON `users`.`id` = `submissions`.`user_id` AND `submissions`.`class_id` = `classes`.`id`" +
-			" WHERE `courses`.`id` = ?" +
-			" GROUP BY `users`.`id`"
-		if err := h.DB.Select(&totals, query, course.ID); err != nil {
+		q3 := "SELECT `score` FROM `user_score` WHERE `course_id` = ? "
+		if err := h.DB.Select(&totals, q3, course.ID); err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
@@ -1235,6 +1233,7 @@ type Score struct {
 // RegisterScores PUT /api/courses/:courseID/classes/:classID/assignments/scores 採点結果登録
 func (h *handlers) RegisterScores(c echo.Context) error {
 	classID := c.Param("classID")
+	courseID := c.Param("courseID")
 
 	tx, err := h.DB.Beginx()
 	if err != nil {
@@ -1262,6 +1261,10 @@ func (h *handlers) RegisterScores(c echo.Context) error {
 
 	for _, score := range req {
 		if _, err := tx.Exec("UPDATE `submissions` JOIN `users` ON `users`.`id` = `submissions`.`user_id` SET `score` = ? WHERE `users`.`code` = ? AND `class_id` = ?", score.Score, score.UserCode, classID); err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		if _, err := tx.Exec("UPDATE `user_score` JOIN `users` ON `users`.`id` = `user_score`.`user_id` SET `score` = `score` + ? WHERE `users`.`code` = ?  AND `course_id` = ?", score.Score, score.UserCode, courseID); err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
