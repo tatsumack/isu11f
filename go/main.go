@@ -641,6 +641,17 @@ func (h *handlers) GetGrades(c echo.Context) error {
 			return c.NoContent(http.StatusInternalServerError)
 		}
 	}
+
+	var closedCources []Course
+	query = "SELECT `courses`.*" +
+		" FROM `registrations`" +
+		" JOIN `courses` ON `registrations`.`course_id` = `courses`.`id`" +
+		" WHERE `status` = ?"
+	if err := h.DB.Select(&closedCources, query, StatusClosed); err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
 	regSubmissionsMap := make(map[string]map[string]Submission)
 	for _, submission := range regSubmissions {
 		if _, exist := regSubmissionsMap[submission.UserID]; !exist {
@@ -821,8 +832,10 @@ func (h *handlers) GetGrades(c echo.Context) error {
 	// GPA = SUM( 科目の総合点 * 科目の単位数 ) / 総獲得単位数 / 100
 	for userId, regSub := range regSubmissionsMap {
 		var sum float64 = 0
-		for courceId, submission := range regSub {
-			sum += float64(submission.Score * int(regCourceMap[courceId].Credit))
+		for _, closed := range closedCources {
+			if sub, ok := regSub[closed.ID]; ok {
+				sum += float64(sub.Score * int(closed.Credit))
+			}
 		}
 		c := creditsMap[userId].Credits
 		var gpa = 0.0
