@@ -612,23 +612,6 @@ func (h *handlers) GetGrades(c echo.Context) error {
 		}
 	}
 
-	regClasses := make([]Class, 0)
-	if (len(regCourceIds) > 0) {
-		query = "SELECT *" +
-			" FROM `classes`" +
-			" WHERE `course_id` IN (?)"
-		sql, params, err := sqlx.In(query, regCourceIds)
-		if err = h.DB.Select(&regClasses, sql, params...); err != nil {
-			c.Logger().Error(err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-	}
-
-	regClassIds := make([]string, 0)
-	for _, class := range regClasses {
-		regClassIds = append(regClassIds, class.ID)
-	}
-
 	var closedCources []Course
 	query = "SELECT `courses`.*" +
 		" FROM `courses`" +
@@ -640,6 +623,23 @@ func (h *handlers) GetGrades(c echo.Context) error {
 	closedCourceIds := make([]string, 0)
 	for _, c := range closedCources {
 		closedCourceIds = append(closedCourceIds, c.ID)
+	}
+
+	regClasses := make([]Class, 0)
+	if (len(regCourceIds) > 0) {
+		query = "SELECT *" +
+			" FROM `classes`" +
+			" WHERE `course_id` IN (?)"
+		sql, params, err := sqlx.In(query, closedCourceIds)
+		if err = h.DB.Select(&regClasses, sql, params...); err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+	}
+
+	regClassIds := make([]string, 0)
+	for _, class := range regClasses {
+		regClassIds = append(regClassIds, class.ID)
 	}
 
 	var regSubmissions []Submission
