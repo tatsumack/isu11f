@@ -300,7 +300,6 @@ func (h *handlers) Login(c echo.Context) error {
 	sess.Values["isAdmin"] = user.Type == Teacher
 	sess.Options = &sessions.Options{
 		Path:   "/",
-		MaxAge: 3600,
 	}
 
 	if err := sess.Save(c.Request(), c.Response()); err != nil {
