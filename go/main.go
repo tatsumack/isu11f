@@ -1491,11 +1491,13 @@ func (h *handlers) AddAnnouncement(c echo.Context) error {
 		data = append(data, d)
 	}
 
-	_, err = tx.NamedExec(
-		"INSERT INTO `unread_announcements` (`announcement_id`, `user_id`) VALUES (:announcement_id, :user_id)", data)
-	if err != nil {
-		c.Logger().Error(err)
-		return c.NoContent(http.StatusInternalServerError)
+	if (len(data) > 0) {
+		_, err = tx.NamedExec(
+			"INSERT INTO `unread_announcements` (`announcement_id`, `user_id`) VALUES (:announcement_id, :user_id)", data)
+		if err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
