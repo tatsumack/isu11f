@@ -1192,14 +1192,18 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 	}
 	defer file.Close()
 
-	if _, err := tx.Exec("INSERT INTO `submissions` (`user_id`, `class_id`, `file_name`) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `file_name` = VALUES(`file_name`)", userID, classID, header.Filename); err != nil {
+
+	result, err := tx.Exec("INSERT INTO `submissions` (`user_id`, `class_id`, `file_name`) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `file_name` = VALUES(`file_name`)", userID, classID, header.Filename);
+	if err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	if _, err := tx.Exec("INSERT INTO `submissions_count` (`class_id`, `cnt`) VALUES (?, 1) ON DUPLICATE KEY UPDATE `cnt` = `cnt` + 1", classID); err != nil {
-		c.Logger().Error(err)
-		return c.NoContent(http.StatusInternalServerError)
+	if (result.RowsAffected() == 1) {
+	  if _, err := tx.Exec("INSERT INTO `submissions_count` (`class_id`, `cnt`) VALUES (?, 1) ON DUPLICATE KEY UPDATE `cnt` = `cnt` + 1", classID); err != nil {
+	    c.Logger().Error(err)
+	    return c.NoContent(http.StatusInternalServerError)
+	  }
 	}
 
 	if err := tx.Commit(); err != nil {
