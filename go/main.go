@@ -23,7 +23,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/sync/singleflight"
 
-	"cloud.google.com/go/profiler"
+	// "cloud.google.com/go/profiler"
 )
 
 const (
@@ -39,14 +39,14 @@ type handlers struct {
 }
 
 func main() {
-	cfg := profiler.Config{
-		Service:        "isu11f",
-		ServiceVersion: "v0.0.3",
-		ProjectID:      os.Getenv("GCP_PROJECT_ID"),
-	}
-	if err := profiler.Start(cfg); err != nil {
-		panic(err)
-	}
+	// cfg := profiler.Config{
+	// 	Service:        "isu11f",
+	// 	ServiceVersion: "v0.0.3",
+	// 	// ProjectID:      os.Getenv("GCP_PROJECT_ID"),
+	// }
+	// if err := profiler.Start(cfg); err != nil {
+	// 	panic(err)
+	// }
 
 	e := echo.New()
 	e.Debug = GetEnv("DEBUG", "") == "true"
@@ -143,21 +143,21 @@ func (h *handlers) Initialize(c echo.Context) error {
 // IsLoggedIn ログイン確認用middleware
 func (h *handlers) IsLoggedIn(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		sess, err := session.Get(SessionName, c)
-		if err != nil {
-			c.Logger().Error(err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-		if sess.IsNew {
-			return c.String(http.StatusUnauthorized, "You are not logged in.")
-		}
-		userID, ok := sess.Values["userID"]
-		if !ok {
-			return c.String(http.StatusUnauthorized, "You are not logged in.")
-		}
-
-		// userIDを付与
-		c.Response().Header().Set("X-Isu-UserId", userID.(string))
+		// sess, err := session.Get(SessionName, c)
+		// if err != nil {
+		// 	c.Logger().Error(err)
+		// 	return c.NoContent(http.StatusInternalServerError)
+		// }
+		// if sess.IsNew {
+		// 	return c.String(http.StatusUnauthorized, "You are not logged in.")
+		// }
+		// userID, ok := sess.Values["userID"]
+		// if !ok {
+		// 	return c.String(http.StatusUnauthorized, "You are not logged in.")
+		// }
+		//
+		// // userIDを付与
+		// c.Response().Header().Set("X-Isu-UserId", userID.(string))
 
 		return next(c)
 	}
@@ -569,11 +569,13 @@ type ClassScore struct {
 
 // GetGrades GET /api/users/me/grades 成績取得
 func (h *handlers) GetGrades(c echo.Context) error {
-	userID, _, _, err := getUserInfo(c)
-	if err != nil {
-		c.Logger().Error(err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
+	// userID, _, _, err := getUserInfo(c)
+	// if err != nil {
+	// 	c.Logger().Error(err)
+	// 	return c.NoContent(http.StatusInternalServerError)
+	// }
+
+	userID := "01FF4RXEKS0DG2EG20CN2GJB8K"
 
 	// 履修している科目一覧取得
 	var registeredCourses []Course
@@ -590,21 +592,40 @@ func (h *handlers) GetGrades(c echo.Context) error {
 	courseResults := make([]CourseResult, 0, len(registeredCourses))
 	myGPA := 0.0
 	myCredits := 0
+
+	courseIDs := []string{}
 	for _, course := range registeredCourses {
+		courseIDs = append(courseIDs, course.ID)
+	}
+	c.Logger().Error(courseIDs)
+	// joinedIDs := strings.Join(courseIDs, ",")
+	//
+	// c.Logger().Error(joinedIDs)
+
+
+	// for _, course := range registeredCourses {
 		// 講義一覧の取得
 		var classes []Class
 		query = "SELECT *" +
 			" FROM `classes`" +
-			" WHERE `course_id` = ?" +
+			" WHERE `course_id` in (?)" +
 			" ORDER BY `part` DESC"
-		if err := h.DB.Select(&classes, query, course.ID); err != nil {
+		query, params, _ := sqlx.In(query, courseIDs)
+		if err := h.DB.Select(&classes, query, params...); err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
 
+		c.Logger().Error(classes)
+
+
 		// 講義毎の成績計算処理
-		classScores := make([]ClassScore, 0, len(classes))
-		var myTotalScore int
+		classScoresMap := map[string][]ClassScore{}
+
+		myTotalScoreMap := map[string]int{}
+
+		// classScores := make([]ClassScore, 0, len(classes))
+		// var myTotalScore int
 		for _, class := range classes {
 			var submissionsCount int
 			if err := h.DB.Get(&submissionsCount, "SELECT COUNT(*) FROM `submissions` WHERE `class_id` = ?", class.ID); err != nil {
@@ -617,7 +638,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 				c.Logger().Error(err)
 				return c.NoContent(http.StatusInternalServerError)
 			} else if err == sql.ErrNoRows || !myScore.Valid {
-				classScores = append(classScores, ClassScore{
+				classScoresMap[class.CourseID] = append(classScoresMap[class.CourseID], ClassScore{
 					ClassID:    class.ID,
 					Part:       class.Part,
 					Title:      class.Title,
@@ -626,8 +647,8 @@ func (h *handlers) GetGrades(c echo.Context) error {
 				})
 			} else {
 				score := int(myScore.Int64)
-				myTotalScore += score
-				classScores = append(classScores, ClassScore{
+				myTotalScoreMap[class.CourseID] += score
+				classScoresMap[class.CourseID] = append(classScoresMap[class.CourseID], ClassScore{
 					ClassID:    class.ID,
 					Part:       class.Part,
 					Title:      class.Title,
@@ -637,20 +658,29 @@ func (h *handlers) GetGrades(c echo.Context) error {
 			}
 		}
 
+		// c.Logger().Error(classScores)
+		c.Logger().Error(classScoresMap)
+		c.Logger().Error(myTotalScoreMap)
+
+
 		// この科目を履修している学生のTotalScore一覧を取得
 		var totals []int
-		query := "SELECT IFNULL(SUM(`submissions`.`score`), 0) AS `total_score`" +
+		query = "SELECT classes.course_id, users.id, IFNULL(submissions.score ,0)" +
 			" FROM `users`" +
 			" JOIN `registrations` ON `users`.`id` = `registrations`.`user_id`" +
-			" JOIN `courses` ON `registrations`.`course_id` = `courses`.`id`" +
-			" LEFT JOIN `classes` ON `courses`.`id` = `classes`.`course_id`" +
+			// " JOIN `courses` ON `registrations`.`course_id` = `courses`.`id`" +
+			" LEFT JOIN `classes` ON `registrations`.`course_id` = `classes`.`course_id`" +
 			" LEFT JOIN `submissions` ON `users`.`id` = `submissions`.`user_id` AND `submissions`.`class_id` = `classes`.`id`" +
-			" WHERE `courses`.`id` = ?" +
+			" WHERE `courses`.`id` in (?)" +
 			" GROUP BY `users`.`id`"
-		if err := h.DB.Select(&totals, query, course.ID); err != nil {
+		query, params, _ = sqlx.In(query, courseIDs)
+		if err := h.DB.Select(&totals, query, params...); err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
+
+		c.Logger().Error(totals)
+
 
 		courseResults = append(courseResults, CourseResult{
 			Name:             course.Name,
@@ -668,7 +698,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 			myGPA += float64(myTotalScore * int(course.Credit))
 			myCredits += int(course.Credit)
 		}
-	}
+	// }
 	if myCredits > 0 {
 		myGPA = myGPA / 100 / float64(myCredits)
 	}
