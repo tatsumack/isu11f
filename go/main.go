@@ -627,7 +627,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 	}
 
 	regClasses := make([]Class, 0)
-	if (len(regCourceIds) > 0) {
+	if (len(closedCourceIds) > 0) {
 		query = "SELECT *" +
 			" FROM `classes`" +
 			" WHERE `course_id` IN (?)"
