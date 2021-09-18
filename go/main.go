@@ -631,7 +631,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 
 	var regSubmissions []Submission
 	if (len(regClassIds) > 0) {
-		query = "SELECT user_id, score" +
+		query = "SELECT user_id, class_id, score" +
 			" FROM `submissions`" +
 			//" WHERE `class_id` IN (?) GROUP BY `user_id`"
 			" WHERE `class_id` IN (?)"
@@ -827,7 +827,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 		c := creditsMap[userId].Credits
 		var gpa = 0.0
 		if (c > 0) {
-			gpa = sum / 100 / float64(c)
+			gpa = sum / 100.0 / float64(c)
 		}
 		gpas = append(gpas, gpa)
 	}
