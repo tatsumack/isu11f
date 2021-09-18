@@ -1368,7 +1368,7 @@ func (h *handlers) GetAnnouncementList(c echo.Context) error {
 	args = append(args, limit, offset)
 
 	var unreadRows []unreadRow
-	if err := tx.Get(&unreadRows, q0, args); err != nil {
+	if err := tx.Get(&unreadRows, q0, args...); err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
