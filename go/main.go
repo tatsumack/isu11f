@@ -40,7 +40,7 @@ type handlers struct {
 func main() {
 	cfg := profiler.Config{
 		Service:        "isu11f",
-		ServiceVersion: "v0.0.100",
+		ServiceVersion: "v0.0.101",
 		ProjectID:      os.Getenv("GCP_PROJECT_ID"),
 	}
 	if err := profiler.Start(cfg); err != nil {
@@ -300,7 +300,7 @@ func (h *handlers) Login(c echo.Context) error {
 	sess.Values["isAdmin"] = user.Type == Teacher
 	sess.Options = &sessions.Options{
 		Path:   "/",
-		MaxAge: 3600,
+		MaxAge: 864000,
 		Secure: false,
 	}
 
