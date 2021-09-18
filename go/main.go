@@ -39,17 +39,20 @@ type handlers struct {
 }
 
 func main() {
-	cfg := profiler.Config{
-		Service:        "isu11f",
-		ServiceVersion: "v0.0.4",
-		ProjectID:      os.Getenv("GCP_PROJECT_ID"),
-	}
-	if err := profiler.Start(cfg); err != nil {
-		panic(err)
+	debug := GetEnv("DEBUG", "") == "true"
+	if !debug {
+		cfg := profiler.Config{
+			Service:        "isu11f",
+			ServiceVersion: "v0.0.4",
+			ProjectID:      os.Getenv("GCP_PROJECT_ID"),
+		}
+		if err := profiler.Start(cfg); err != nil {
+			panic(err)
+		}
 	}
 
 	e := echo.New()
-	e.Debug = GetEnv("DEBUG", "") == "true"
+	e.Debug = debug
 	e.Server.Addr = fmt.Sprintf(":%v", GetEnv("PORT", "7000"))
 	e.HideBanner = true
 
@@ -143,6 +146,10 @@ func (h *handlers) Initialize(c echo.Context) error {
 // IsLoggedIn ログイン確認用middleware
 func (h *handlers) IsLoggedIn(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		if c.Echo().Debug {
+			return next(c)
+		}
+
 		sess, err := session.Get(SessionName, c)
 		if err != nil {
 			c.Logger().Error(err)
@@ -185,6 +192,9 @@ func (h *handlers) IsAdmin(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 func getUserInfo(c echo.Context) (userID string, userName string, isAdmin bool, err error) {
+	if (c.Echo().Debug) {
+		return "01FF4RXEKS0DG2EG20CN2GJB8K", "isucon1", false, nil
+	}
 	sess, err := session.Get(SessionName, c)
 	if err != nil {
 		return "", "", false, err
