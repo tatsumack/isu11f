@@ -41,7 +41,7 @@ type handlers struct {
 func main() {
 	cfg := profiler.Config{
 		Service:        "isu11f",
-		ServiceVersion: "v0.0.3",
+		ServiceVersion: "v0.0.4",
 		ProjectID:      os.Getenv("GCP_PROJECT_ID"),
 	}
 	if err := profiler.Start(cfg); err != nil {
@@ -1318,6 +1318,18 @@ type GetAnnouncementsResponse struct {
 	Announcements []AnnouncementWithoutDetail `json:"announcements"`
 }
 
+type AnnouncementIDTitleName struct {
+	ID         string `json:"id" db:"id"`
+	Title      string `json:"title" db:"title"`
+	CourseID   string `json:"course_id" db:"course_id"`
+	CourseName string `json:"course_name" db:"course_name"`
+}
+
+type unreadRow struct {
+	AnnouncementID string `json:"announcement_id" db:"announcement_id"`
+	IsDeleted      int    `json:"is_deleted" db:"is_deleted"`
+}
+
 // GetAnnouncementList GET /api/announcements お知らせ一覧取得
 func (h *handlers) GetAnnouncementList(c echo.Context) error {
 	userID, _, _, err := getUserInfo(c)
@@ -1325,33 +1337,6 @@ func (h *handlers) GetAnnouncementList(c echo.Context) error {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
-
-	tx, err := h.DB.Beginx()
-	if err != nil {
-		c.Logger().Error(err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-	defer tx.Rollback()
-
-	var announcements []AnnouncementWithoutDetail
-	var args []interface{}
-	query := "SELECT `announcements`.`id`, `courses`.`id` AS `course_id`, `courses`.`name` AS `course_name`, `announcements`.`title`, NOT `unread_announcements`.`is_deleted` AS `unread`" +
-		" FROM `announcements`" +
-		" JOIN `courses` ON `announcements`.`course_id` = `courses`.`id`" +
-		" JOIN `registrations` ON `courses`.`id` = `registrations`.`course_id`" +
-		" JOIN `unread_announcements` ON `announcements`.`id` = `unread_announcements`.`announcement_id`" +
-		" WHERE 1=1"
-
-	if courseID := c.QueryParam("course_id"); courseID != "" {
-		query += " AND `announcements`.`course_id` = ?"
-		args = append(args, courseID)
-	}
-
-	query += " AND `unread_announcements`.`user_id` = ?" +
-		" AND `registrations`.`user_id` = ?" +
-		" ORDER BY `announcements`.`id` DESC" +
-		" LIMIT ? OFFSET ?"
-	args = append(args, userID, userID)
 
 	var page int
 	if c.QueryParam("page") == "" {
@@ -1362,14 +1347,66 @@ func (h *handlers) GetAnnouncementList(c echo.Context) error {
 			return c.String(http.StatusBadRequest, "Invalid page.")
 		}
 	}
+
+	tx, err := h.DB.Beginx()
+	if err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	defer tx.Rollback()
+
 	limit := 20
 	offset := limit * (page - 1)
+	var args []interface{}
+	q0 := "SELECT `announcement_id`, `is_deleted` FROM `unread_announcements` WHERE `user_id` = ? "
+	args = append(args, userID)
+	if courseID := c.QueryParam("course_id"); courseID != "" {
+		q0 += " AND `course_id` = ?"
+		args = append(args, courseID)
+	}
+	q0 += "  ORDER BY `announcement_id` DESC LIMIT ? OFFSET ? "
 	// limitより多く上限を設定し、実際にlimitより多くレコードが取得できた場合は次のページが存在する
 	args = append(args, limit+1, offset)
 
-	if err := tx.Select(&announcements, query, args...); err != nil {
+	var unreadRows []unreadRow
+	if err := tx.Select(&unreadRows, q0, args...); err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	var announcementIDs []string
+	unreadMap := map[string]bool{}
+	for _, row := range unreadRows {
+		announcementIDs = append(announcementIDs, row.AnnouncementID)
+		unreadMap[row.AnnouncementID] = row.IsDeleted == 0
+	}
+
+	var announcements []AnnouncementWithoutDetail
+	if len(announcementIDs) > 0 {
+		q1 := "SELECT `announcements`.`id`, `announcements`.`title`, `announcements`.`course_name`,`announcements`.`course_id`" +
+			" FROM `announcements`" +
+			" WHERE `announcements`.`id` IN (?) ORDER BY `id` DESC"
+		q1, params, err := sqlx.In(q1, announcementIDs)
+		if err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+
+		var announcementRows []AnnouncementIDTitleName
+		if err := tx.Select(&announcementRows, q1, params...); err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+
+		for _, row := range announcementRows {
+			announcements = append(announcements, AnnouncementWithoutDetail{
+				ID:         row.ID,
+				CourseID:   row.CourseID,
+				CourseName: row.CourseName,
+				Title:      row.Title,
+				Unread:     unreadMap[row.ID],
+			})
+		}
 	}
 
 	var unreadCount int
@@ -1419,10 +1456,11 @@ func (h *handlers) GetAnnouncementList(c echo.Context) error {
 }
 
 type Announcement struct {
-	ID       string `db:"id"`
-	CourseID string `db:"course_id"`
-	Title    string `db:"title"`
-	Message  string `db:"message"`
+	ID         string `db:"id"`
+	CourseID   string `db:"course_id"`
+	CourseName string `db:"course_name"`
+	Title      string `db:"title"`
+	Message    string `db:"message"`
 }
 
 type AddAnnouncementRequest struct {
@@ -1446,17 +1484,17 @@ func (h *handlers) AddAnnouncement(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
-	var count int
-	if err := tx.Get(&count, "SELECT COUNT(*) FROM `courses` WHERE `id` = ?", req.CourseID); err != nil {
+	var courseName string
+	if err := tx.Get(&courseName, "SELECT `name` FROM `courses` WHERE `id` = ?", req.CourseID); err != nil {
+		if err == sql.ErrNoRows {
+			return c.String(http.StatusNotFound, "No such course.")
+		}
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
-	if count == 0 {
-		return c.String(http.StatusNotFound, "No such course.")
-	}
 
-	if _, err := tx.Exec("INSERT INTO `announcements` (`id`, `course_id`, `title`, `message`) VALUES (?, ?, ?, ?)",
-		req.ID, req.CourseID, req.Title, req.Message); err != nil {
+	if _, err := tx.Exec("INSERT INTO `announcements` (`id`, `course_id`, `course_name`, `title`, `message`) VALUES (?, ?, ?, ?, ?)",
+		req.ID, req.CourseID, courseName, req.Title, req.Message); err != nil {
 		_ = tx.Rollback()
 		if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == uint16(mysqlErrNumDuplicateEntry) {
 			var announcement Announcement
@@ -1486,14 +1524,15 @@ func (h *handlers) AddAnnouncement(c echo.Context) error {
 	for _, target := range targets {
 		d := struct {
 			Announcement string `db:"announcement_id"`
+			CourseId string `db:"course_id"`
 			UserId string `db:"user_id"`
-		} { req.ID, target.ID }
+		} { req.ID, req.CourseID, target.ID }
 		data = append(data, d)
 	}
 
 	if (len(data) > 0) {
 		_, err = tx.NamedExec(
-			"INSERT INTO `unread_announcements` (`announcement_id`, `user_id`) VALUES (:announcement_id, :user_id)", data)
+			"INSERT INTO `unread_announcements` (`announcement_id`, `user_id`) VALUES (:announcement_id, :course_id, :user_id)", data)
 		if err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
