@@ -1383,7 +1383,7 @@ func (h *handlers) GetAnnouncementList(c echo.Context) error {
 
 	q1 := "SELECT `announcements`.`id`, `announcements`.`title`, `announcements`.`course_name`,`announcements`.`course_id`" +
 		" FROM `announcements`" +
-		" WHERE `announcements`.`id` IN (?) ORDER BY `announcement_id` DESC"
+		" WHERE `announcements`.`id` IN (?) ORDER BY `id` DESC"
 	q1, params, err := sqlx.In(q1, announcementIDs)
 	if err != nil {
 		c.Logger().Error(err)
