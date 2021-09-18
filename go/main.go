@@ -606,47 +606,50 @@ func (h *handlers) GetGrades(c echo.Context) error {
 		for _, class := range classes {
 			classIDs = append(classIDs, class.ID)
 		}
-		q1 := "SELECT `class_id`, `cnt`" +
-			" FROM `submissions_count`" +
-			" WHERE `class_id` IN (?)"
-		q1, params, err := sqlx.In(q1, classIDs)
-		if err != nil {
-			c.Logger().Error(err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-		type countRow struct {
-			ClassID string `db:"class_id"`
-			Cnt     int    `db:"cnt"`
-		}
-		var countRows []countRow
-		if err := h.DB.Select(&countRows, q1, params...); err != nil {
-			c.Logger().Error(err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
 		countMap := map[string]int{}
-		for _, row := range countRows {
-			countMap[row.ClassID] = row.Cnt
+		scoreMap := map[string]sql.NullInt64{}
+		if len(classIDs) > 0 {
+			q1 := "SELECT `class_id`, `cnt`" +
+				" FROM `submissions_count`" +
+				" WHERE `class_id` IN (?)"
+			q1, params, err := sqlx.In(q1, classIDs)
+			if err != nil {
+				c.Logger().Error(err)
+				return c.NoContent(http.StatusInternalServerError)
+			}
+			type countRow struct {
+				ClassID string `db:"class_id"`
+				Cnt     int    `db:"cnt"`
+			}
+			var countRows []countRow
+			if err := h.DB.Select(&countRows, q1, params...); err != nil {
+				c.Logger().Error(err)
+				return c.NoContent(http.StatusInternalServerError)
+			}
+			for _, row := range countRows {
+				countMap[row.ClassID] = row.Cnt
+			}
+
+			q2 := "SELECT `class_id`, `score` FROM `submissions` WHERE `user_id` = ? AND `class_id` in (?) "
+			q2, params2, err := sqlx.In(q2, userID, classIDs)
+			if err != nil {
+				c.Logger().Error(err)
+				return c.NoContent(http.StatusInternalServerError)
+			}
+			type subRow struct {
+				ClassID string        `db:"class_id"`
+				Score   sql.NullInt64 `db:"score"`
+			}
+			var subRows []subRow
+			if err := h.DB.Select(&subRows, q2, params2...); err != nil {
+				c.Logger().Error(err)
+				return c.NoContent(http.StatusInternalServerError)
+			}
+			for _, row := range subRows {
+				scoreMap[row.ClassID] = row.Score
+			}
 		}
 
-		q2 := "SELECT `class_id`, `score` FROM `submissions` WHERE `user_id` = ? AND `class_id` in (?) "
-		q2, params2, err := sqlx.In(q2, userID, classIDs)
-		if err != nil {
-			c.Logger().Error(err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-		type subRow struct {
-			ClassID string        `db:"class_id"`
-			Score   sql.NullInt64 `db:"score"`
-		}
-		var subRows []subRow
-		if err := h.DB.Select(&subRows, q2, params2...); err != nil {
-			c.Logger().Error(err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-		scoreMap := map[string]sql.NullInt64{}
-		for _, row := range subRows {
-			scoreMap[row.ClassID] = row.Score
-		}
 
 		// 講義毎の成績計算処理
 		classScores := make([]ClassScore, 0, len(classes))
