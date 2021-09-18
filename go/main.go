@@ -1115,17 +1115,6 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
-	var status CourseStatus
-	if err := tx.Get(&status, "SELECT `status` FROM `courses` WHERE `id` = ? FOR SHARE", courseID); err != nil && err != sql.ErrNoRows {
-		c.Logger().Error(err)
-		return c.NoContent(http.StatusInternalServerError)
-	} else if err == sql.ErrNoRows {
-		return c.String(http.StatusNotFound, "No such course.")
-	}
-	if status != StatusInProgress {
-		return c.String(http.StatusBadRequest, "This course is not in progress.")
-	}
-
 	var registrationCount int
 	if err := tx.Get(&registrationCount, "SELECT COUNT(*) FROM `registrations` WHERE `user_id` = ? AND `course_id` = ?", userID, courseID); err != nil {
 		c.Logger().Error(err)
@@ -1145,6 +1134,19 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 	if submissionClosed {
 		return c.String(http.StatusBadRequest, "Submission has been closed for this class.")
 	}
+
+	/*
+	var status CourseStatus
+	if err := tx.Get(&status, "SELECT `status` FROM `courses` WHERE `id` = ? FOR SHARE", courseID); err != nil && err != sql.ErrNoRows {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	} else if err == sql.ErrNoRows {
+		return c.String(http.StatusNotFound, "No such course.")
+	}
+	if status != StatusInProgress {
+		return c.String(http.StatusBadRequest, "This course is not in progress.")
+	}
+	*/
 
 	file, header, err := c.Request().FormFile("file")
 	if err != nil {
