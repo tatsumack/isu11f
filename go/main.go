@@ -23,7 +23,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/sync/singleflight"
 
-	"cloud.google.com/go/profiler"
 )
 
 const (
@@ -39,14 +38,6 @@ type handlers struct {
 }
 
 func main() {
-	cfg := profiler.Config{
-		Service:        "isu11f",
-		ServiceVersion: "v0.0.4",
-		ProjectID:      os.Getenv("GCP_PROJECT_ID"),
-	}
-	if err := profiler.Start(cfg); err != nil {
-		panic(err)
-	}
 
 	e := echo.New()
 	e.Debug = GetEnv("DEBUG", "") == "true"
