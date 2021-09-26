@@ -1263,11 +1263,24 @@ func (h *handlers) RegisterScores(c echo.Context) error {
 	}
 
 	for _, score := range req {
+
+		var targetScore sql.NullInt64
+		if err := tx.Get(&targetScore, "SELECT `score` FROM `submissions` JOIN `users` ON `users`.`id` = `submissions`.`user_id` WHERE `users`.`code` = ? AND `class_id` = ?", score.UserCode, classID); err != nil && err != sql.ErrNoRows {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+
 		if _, err := tx.Exec("UPDATE `submissions` JOIN `users` ON `users`.`id` = `submissions`.`user_id` SET `score` = ? WHERE `users`.`code` = ? AND `class_id` = ?", score.Score, score.UserCode, classID); err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
-		if _, err := tx.Exec("UPDATE `user_score` JOIN `users` ON `users`.`id` = `user_score`.`user_id` SET `score` = `score` + ? WHERE `users`.`code` = ?  AND `course_id` = ?", score.Score, score.UserCode, courseID); err != nil {
+
+		updateScore := score.Score
+		if (targetScore.Valid) {
+		        updateScore = score.Score - int(targetScore.Int64)
+		}
+
+		if _, err := tx.Exec("UPDATE `user_score` JOIN `users` ON `users`.`id` = `user_score`.`user_id` SET `score` = `score` + ? WHERE `users`.`code` = ?  AND `course_id` = ?", updateScore, score.UserCode, courseID); err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
