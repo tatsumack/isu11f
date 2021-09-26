@@ -703,29 +703,48 @@ func (h *handlers) GetGrades(c echo.Context) error {
 		myGPA = myGPA / 100 / float64(myCredits)
 	}
 
-	// GPAの統計値
-	// 一つでも修了した科目がある学生のGPA一覧
-	var gpas []float64
-	query = "SELECT IFNULL(SUM(`submissions`.`score` * `courses`.`credit`), 0) / 100 / `credits`.`credits` AS `gpa`" +
-		" FROM `users`" +
-		" JOIN (" +
-		"     SELECT `users`.`id` AS `user_id`, SUM(`courses`.`credit`) AS `credits`" +
-		"     FROM `users`" +
-		"     JOIN `registrations` ON `users`.`id` = `registrations`.`user_id`" +
-		"     JOIN `courses` ON `registrations`.`course_id` = `courses`.`id` AND `courses`.`status` = ?" +
-		"     GROUP BY `users`.`id`" +
-		" ) AS `credits` ON `credits`.`user_id` = `users`.`id`" +
-		" JOIN `registrations` ON `users`.`id` = `registrations`.`user_id`" +
-		" JOIN `courses` ON `registrations`.`course_id` = `courses`.`id` AND `courses`.`status` = ?" +
-		" LEFT JOIN `classes` ON `courses`.`id` = `classes`.`course_id`" +
-		" LEFT JOIN `submissions` ON `users`.`id` = `submissions`.`user_id` AND `submissions`.`class_id` = `classes`.`id`" +
-		" WHERE `users`.`type` = ?" +
-		" GROUP BY `users`.`id`"
-	if err := h.DB.Select(&gpas, query, StatusClosed, StatusClosed, Student); err != nil {
+	type userScoreRow struct {
+		UserID   string `db:"user_id"`
+		CourseID string `db:"course_id"`
+		Score    int    `db:"score"`
+	}
+	var userScoreRows []userScoreRow
+	qq1 := "SELECT `user_id`, `course_id`, `score` from user_score"
+	if err := h.DB.Select(&userScoreRows, qq1); err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
+	var courseIDs []string
+	for _, row := range userScoreRows {
+		courseIDs = append(courseIDs, row.CourseID)
+	}
 
+	qq2 := "SELECT `id`, `credit` from courses WHERE `course_id` in (?)"
+	qq2, params2, err := sqlx.In(qq2, courseIDs)
+	type courseRow struct {
+		CourseID string `db:"id"`
+		Credit   int    `db:"credit"`
+	}
+	var courseRows []courseRow
+	if err := h.DB.Select(&courseRows, qq2, params2...); err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	creditMap := map[string]int{}
+	for _, row := range courseRows {
+		creditMap[row.CourseID] = row.Credit
+	}
+
+	// GPAの統計値
+	// 一つでも修了した科目がある学生のGPA一覧
+	userScoreMap := map[string]float64{}
+	for _, score := range userScoreRows {
+		userScoreMap[score.UserID] += float64(score.Score) * float64(creditMap[score.CourseID])
+	}
+	var gpas []float64
+	for _, v := range userScoreMap {
+		gpas = append(gpas, v)
+	}
 	res := GetGradeResponse{
 		Summary: Summary{
 			Credits:   myCredits,
@@ -1182,7 +1201,7 @@ func (h *handlers) SubmitAssignment(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "Submission has been closed for this class.")
 	}
 
-	result, err := tx.Exec("INSERT INTO `submissions` (`user_id`, `class_id`, `file_name`) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `file_name` = VALUES(`file_name`)", userID, classID, header.Filename);
+	result, err := tx.Exec("INSERT INTO `submissions` (`user_id`, `class_id`, `file_name`) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `file_name` = VALUES(`file_name`)", userID, classID, header.Filename)
 	if err != nil {
 		c.Logger().Error(err)
 		return c.NoContent(http.StatusInternalServerError)
