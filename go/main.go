@@ -719,7 +719,7 @@ func (h *handlers) GetGrades(c echo.Context) error {
 		courseIDs = append(courseIDs, row.CourseID)
 	}
 
-	qq2 := "SELECT `id`, `credit` from courses WHERE `course_id` in (?)"
+	qq2 := "SELECT `id`, `credit` from courses WHERE `id` in (?)"
 	qq2, params2, err := sqlx.In(qq2, courseIDs)
 	type courseRow struct {
 		CourseID string `db:"id"`
